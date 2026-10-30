@@ -1,0 +1,113 @@
+
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Wild Arena</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#17251d;color:white;font-family:Arial;text-align:center;overflow:hidden;touch-action:none}
+h2{margin:8px}
+#info{display:flex;justify-content:space-around;padding:8px;background:#263d30;font-weight:bold}
+canvas{display:block;width:100vw;height:65vh;background:#719b55;touch-action:none}
+#controls{display:flex;justify-content:space-around;align-items:center;padding:12px}
+#stick{width:110px;height:110px;border-radius:50%;background:#ffffff33;border:3px solid white;position:relative}
+#knob{width:44px;height:44px;border-radius:50%;background:#eee;position:absolute;left:30px;top:30px}
+button{border:0;border-radius:50%;width:90px;height:90px;background:#e65b37;color:white;font-size:18px;font-weight:bold}
+#restart{width:auto;height:auto;border-radius:10px;padding:10px 20px}
+</style>
+</head>
+<body>
+<h2>🐾 WILD ARENA</h2>
+<div id="info">
+<span id="hp">❤️ 100</span>
+<span id="kills">☠️ 0</span>
+<span id="time">⏱️ 0</span>
+</div>
+<canvas id="game"></canvas>
+<div id="controls">
+<div id="stick"><div id="knob"></div></div>
+<button id="attack">ATAC!</button>
+</div>
+<div id="message"></div>
+<button id="restart" onclick="restart()">REÎNCEPE</button>
+<script>
+const c=document.getElementById("game"),ctx=c.getContext("2d");
+let W,H,player,bots,shots,zone,kills,seconds,over,last=0;
+function resize(){
+ const r=c.getBoundingClientRect();
+ c.width=r.width*devicePixelRatio;c.height=r.height*devicePixelRatio;
+ ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+ W=r.width;H=r.height;
+}
+window.addEventListener("resize",resize);resize();
+function restart(){
+ player={x:W/2,y:H/2,hp:100};
+ bots=Array.from({length:6},(_,i)=>({x:40+Math.random()*(W-80),y:40+Math.random()*(H-80),hp:50,cd:0}));
+ shots=[];zone={r:Math.min(W,H)*.48};kills=0;seconds=0;over=false;
+ document.getElementById("message").textContent="";
+}
+restart();
+let dx=0,dy=0,drag=false;
+const stick=document.getElementById("stick"),knob=document.getElementById("knob");
+function moveStick(e){
+ const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;
+ const len=Math.hypot(x,y),m=Math.min(32,len),a=Math.atan2(y,x);
+ dx=len?Math.cos(a)*m/32:0;dy=len?Math.sin(a)*m/32:0;
+ knob.style.left=(33+dx*32)+"px";knob.style.top=(33+dy*32)+"px";
+}
+stick.addEventListener("pointerdown",e=>{drag=true;stick.setPointerCapture(e.pointerId);moveStick(e)});
+stick.addEventListener("pointermove",e=>{if(drag)moveStick(e)});
+function stop(){drag=false;dx=dy=0;knob.style.left="30px";knob.style.top="30px"}
+stick.addEventListener("pointerup",stop);stick.addEventListener("pointercancel",stop);
+function attack(){
+ if(over)return;
+ let b=bots.filter(b=>b.hp>0).sort((a,b)=>Math.hypot(a.x-player.x,a.y-player.y)-Math.hypot(b.x-player.x,b.y-player.y))[0];
+ if(b&&Math.hypot(b.x-player.x,b.y-player.y)<150){
+ b.hp-=25;if(b.hp<=0)kills++;
+ }
+}
+document.getElementById("attack").addEventListener("pointerdown",e=>{e.preventDefault();attack()});
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle="#719b55";ctx.fillRect(0,0,W,H);
+ for(let i=0;i<12;i++){
+ let x=(i*83+30)%W,y=(i*57+20)%H;
+ ctx.fillStyle="#47733d";ctx.beginPath();ctx.arc(x,y,13,0,7);ctx.fill();
+ }
+ ctx.strokeStyle="#d8e9a1";ctx.lineWidth=4;ctx.beginPath();ctx.arc(W/2,H/2,zone.r,0,7);ctx.stroke();
+ bots.forEach(b=>{
+ if(b.hp<=0)return;
+ let a=Math.atan2(player.y-b.y,player.x-b.x);
+ b.x+=Math.cos(a)*.55;b.y+=Math.sin(a)*.55;
+ ctx.fillStyle="#b94d39";ctx.beginPath();ctx.arc(b.x,b.y,13,0,7);ctx.fill();
+ ctx.fillStyle="white";ctx.fillRect(b.x-14,b.y-22,28,4);
+ ctx.fillStyle="#e44";ctx.fillRect(b.x-14,b.y-22,28*b.hp/50,4);
+ if(Math.hypot(b.x-player.x,b.y-player.y)<22&&Math.random()<.035)player.hp-=2;
+ });
+ ctx.fillStyle="#287bd1";ctx.beginPath();ctx.arc(player.x,player.y,15,0,7);ctx.fill();
+ ctx.fillStyle="white";ctx.font="17px Arial";ctx.fillText("🐾",player.x-10,player.y+6);
+}
+function loop(t){
+ if(!last)last=t;
+ let dt=Math.min((t-last)/16,2);last=t;
+ if(!over){
+ seconds+=dt/60;
+ player.x=Math.max(15,Math.min(W-15,player.x+dx*3*dt));
+ player.y=Math.max(15,Math.min(H-15,player.y+dy*3*dt));
+ zone.r=Math.max(35,zone.r-.008*dt);
+ if(Math.hypot(player.x-W/2,player.y-H/2)>zone.r)player.hp-=.08*dt;
+ if(player.hp<=0){player.hp=0;over=true;document.getElementById("message").textContent="AI PIERDUT!";}
+ if(bots.every(b=>b.hp<=0)){over=true;document.getElementById("message").textContent="AI CÂȘTIGAT!";}
+ }
+ draw();
+ document.getElementById("hp").textContent="❤️ "+Math.ceil(player.hp);
+ document.getElementById("kills").textContent="☠️ "+kills;
+ document.getElementById("time").textContent="⏱️ "+Math.floor(seconds);
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
